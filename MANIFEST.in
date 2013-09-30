@@ -1,0 +1,4 @@
+include README.md INSTALL.txt LICENCE.txt
+recursive-include subledger *.py
+include docs/Makefile
+recursive-include docs/source *
