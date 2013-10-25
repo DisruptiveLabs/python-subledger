@@ -2,8 +2,14 @@
 Subledger API accounting models
 
 
+TODO: .archive() and .activate() on SubledgerBase
+
+TODO: JournalEntry model
+TODO: Category model
+TODO: Report model
+
 Nice to haves
-TODO: store _org_id in Book
+DONE: store _org_id in Book
       use property to load the Org on lookup
       self._org_id = '8750282098'
       @property
@@ -33,6 +39,11 @@ def memoize(func):
     return memoizer
 
 
+class Dummy:
+    """Imitate Subledger instances without http requests to Subledger """
+    pass
+
+
 class SubledgerBase(object):
     """Provide access to a Subledger object 
     
@@ -58,9 +69,9 @@ class SubledgerBase(object):
         self._id = None
         self._version = None
         
-    def archive(self):
-        # TODO: finisch this
-        path = self.api
+    #def archive(self):
+        ## TODO: finisch this
+        #path = self.api
         
     def _save(self, path, data):
         """Write data to Subledger 
@@ -156,22 +167,18 @@ class Book(SubledgerBase):
         """
         super(Book, self).__init__(description, reference)
         # Book specific fields
-        self._org = org
+        self._org_id = org._id  # Rember the org_id
     
-    @classmethod
-    def active(cls, organization):
-        """Return iterator over all active books """
-        path = cls.path % {'org_id': organization._id, 'book_id': ''}
-        data = {'state': 'active',
-                'action': 'starting'}
-        result = cls.api.get_json(path, data)
-        for v in result['active_books']:
-            yield cls.from_dict(v)
+    @property
+    def organization(self):
+        """Return the organization that owns this Book """
+        # Organization will return itself from cache or load from Subledger
+        return Organization.from_id(self._org_id)
         
     def save(self):
         """Store Book instance in Subledger 
         
-        The `id` will be created by Subledger for a new Organization.
+        The `id` will be created by Subledger for a new Book.
         
         `description` and `reference` will taken from the instance.
         `version` will be incremented automatically.
@@ -179,6 +186,18 @@ class Book(SubledgerBase):
         path = self.path % {'org_id': self._org._id,
                              'book_id': self._id or ''}
         return self._save(path, {})
+    
+    @classmethod
+    def all(
+        cls, organization, state='active',
+        action='starting', id_=None, description=None, limit=None):
+        """Iterate over all books for given organization """
+        path = cls.path % {'org_id': organization._id, 'book_id': ''}
+        data = {'state': state, 'action': action, 'id': id_,
+                'description':description, 'limit': limit}
+        result = cls.api.get_json(path, data)
+        for v in result['%s_books' % state]:
+            yield cls.from_dict(v)
     
     @classmethod
     @memoize
@@ -201,8 +220,9 @@ class Book(SubledgerBase):
         All data should be in the dictionary `data`
         This method will not query Subledger
         """
-        # Load related important info
-        org = Organization.from_id(data['org'])
+        # Emulate Org object
+        org = Dummy()
+        org._id = data['org']
         # Create instance
         self = cls(org, data['description'], data.get('reference'))
         self._id = data['id']
@@ -210,7 +230,9 @@ class Book(SubledgerBase):
         return self
     
     def __repr__(self):
-        return "Book(%(_org)r, %(description)s) %(_id)s" % self.__dict__
+        data = self.__dict__.copy()
+        data['organization'] = Organization.from_id(self._org_id)
+        return "Book(%(organization)r, %(description)s) %(_id)s" % data
 
 
 class Account(SubledgerBase):
@@ -224,27 +246,26 @@ class Account(SubledgerBase):
     def __init__(
         self, book, description, normal_balance='credit', reference=None):
         """Create an accounting book for the given Organization.
+        
+        `book` should be passed as an instance of Book
         """
         super(Account, self).__init__(description, reference)
         # Account specific fields
-        self._book = book
+        self._org_id = book.org_id
+        self._book_id = book._id
         # Debit or Credit account?
-        self.normal_balance = normal_balance
+        self.normal_balance = normal_balance # 'debit' or 'credit'
     
-    @classmethod
-    def active(cls, book):
-        """Return iterator over all active books """
-        path = cls.path % {'org_id': book._org._id, 'book_id': ''}
-        data = {'state': 'active',
-                'action': 'starting'}
-        result = cls.api.get_json(path, data)
-        for v in result['active_books']:
-            yield cls.from_dict(v)
+    @property
+    def book(self):
+        """Return the Book that this account exists in """
+        # Book will return itself from cache or load from Subledger
+        return Book.from_id(self._book_id, self._org_id)
         
     def save(self):
-        """Store Book instance in Subledger 
+        """Store Account instance in Subledger 
         
-        The `id` will be created by Subledger for a new Organization.
+        The `id` will be created by Subledger for a new Account.
         
         `description` and `reference` will taken from the instance.
         `version` will be incremented automatically.
@@ -252,8 +273,23 @@ class Account(SubledgerBase):
         path = self.path % {'org_id': self.book._org._id,
                              'book_id': self.book._id,
                              'account_id': self._id or ''}
+        # Book specific attributes
         data = {'normal_balance': self.normal_balance}
         return self._save(path, data)
+    
+    @classmethod
+    def all(
+        cls, book, state='active',
+        action='starting', id_=None, description=None, limit=None):
+        """Iterate over all accounts within given book """
+        path = cls.path % {'org_id': book._org_id, 'book_id': book._id}
+        data = {'state': state, 'action': action, 'id': id_,
+                'description':description, 'limit': limit}
+        result = cls.api.get_json(path, data)
+        for v in result['%s_accounts' % state]:
+            # Add org_id to the data, it is not returned by Subledger
+            v['org'] = book._org_id
+            yield cls.from_dict(v)
     
     @classmethod
     @memoize
@@ -269,6 +305,8 @@ class Account(SubledgerBase):
                            'account_id': id_}
         result =  cls.api.get_json(path)
         data = result[result.keys()[0]]
+        # Add org_id to the data, it is not returned by Subledger
+        data['org'] = org_id
         return cls.from_dict(data)
     
     @classmethod
@@ -278,9 +316,11 @@ class Account(SubledgerBase):
         All data should be in the dictionary `data`
         This method will not query Subledger
         """
-        # Load related important info
-        book = Book.from_id(data['book'])
-        # Create instance
+        # Emulate Book object without http requests
+        book = Dummy()
+        book._id = data['book']
+        book._org_id = data['org']
+        # Create Account instance
         self = cls(book, data['description'],
                    data['normal_balance'],
                    data.get('reference'))
@@ -289,6 +329,8 @@ class Account(SubledgerBase):
         return self
     
     def __repr__(self):
-        signature = "Account(%(_org)r, %(_org)r, %(description)s, "\
+        data = self.__dict__.copy()
+        data['book'] = Book.from_id(self._book_id, self._org_id)
+        signature = "Account(%(book)r, %(description)s, "\
             "%(normal_balance)s) %(_id)s"
         return signature % self.__dict__
