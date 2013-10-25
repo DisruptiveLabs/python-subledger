@@ -19,6 +19,7 @@ Todo:
 * JournalEntry
 * Category
 * Report
+* Identity (nice to have)
 * ReportRenderings (nice to have)
 
 
