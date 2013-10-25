@@ -64,6 +64,19 @@ class Organization(SubledgerBase):
         self._version = data['version']
         return self
     
+    @classmethod
+    def from_dict(cls, data):
+        """Instantiate a Organization from a Subledger representation 
+        
+        All data should be in the dictionary `data`
+        This method will not query Subledger
+        """
+        # Create instance
+        self = cls(data['description'], data.get('reference'))
+        self._id = data['id']
+        self._version = data['version']
+        return self
+    
     def __repr__(self):
         return "Organization(%(description)s) %(_id)s" % self.__dict__
 
@@ -79,7 +92,7 @@ class Book(SubledgerBase):
     def __init__(self, org, description, reference=None):
         """Create an accounting book for the given Organization.
         
-        You cannot change
+        You cannot change the organization the Book belongs to.
         """
         super(Book, self).__init__(description, reference)
         # Book specific fields

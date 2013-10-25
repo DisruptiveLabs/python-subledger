@@ -122,7 +122,13 @@ class SubledgerBase(object):
 
     @classmethod
     def from_id(cls):
+        """Load instance from Subledger by id """
         raise NotImplementedError('Each class should implement from_id')
+
+    @classmethod
+    def from_dict(cls):
+        """Create instance from values without contacting Subledger """
+        raise NotImplementedError('Each class should implement from_dict')
 
     def __unicode__(self):
         return unicode(self.__dict__)
