@@ -33,11 +33,11 @@ class Organization(SubledgerBase):
     EUR and XBT. For transactions in euro and bitcoin respectively.
     """
     _path = '/orgs/%(_id)s'
-    types = ('active_org', 'archived_org')
+    _types = ('active_org', 'archived_org')
     
     @classmethod
     @memoize
-    def from_id(cls, id_): #, org_id=None, book_id=None, *args, **kwargs):
+    def from_id(cls, id_):
         """Read object with the given id from Subledger
         
         Most objects need additional id's to identify the resource, these will 
@@ -46,11 +46,13 @@ class Organization(SubledgerBase):
         # Build path
         path = cls._path % {'_id': id_}
         result =  cls._api.get_json(path)
-        data = result[result.keys()[0]]
+        type_ = result.keys()[0]
+        data = result[type_]
         # Create instance
         self = cls(data['description'], data.get('reference'))
         self._id = data['id']
         self._version = data['version']
+        self._set_type(type_)
         return self
     
     @classmethod
@@ -65,6 +67,7 @@ class Organization(SubledgerBase):
         self = cls(data['description'], data.get('reference'))
         self._id = data['id']
         self._version = data['version']
+        self._set_type(data['type'])
         return self
     
     def __repr__(self):
@@ -77,8 +80,7 @@ class Book(SubledgerBase):
     This is the accounting book than can be used for a single asset.
     """
     _path = '/orgs/%(_org_id)s/books/%(_id)s'
-#    path = '/orgs/%(_org_id)s/books/%(_id)s'
-    types = ('active_book', 'archived_book')
+    _types = ('active_book', 'archived_book')
     
     def __init__(self, org, description, reference=None):
         """Create an accounting book for the given Organization.
@@ -108,6 +110,7 @@ class Book(SubledgerBase):
                 'description':description, 'limit': limit}
         result = cls._api.get_json(path, data)
         for v in result['%s_books' % state]:
+            v['type'] = "%s_book" % state
             yield cls.from_dict(v)
     
     @classmethod
@@ -121,7 +124,9 @@ class Book(SubledgerBase):
         # Build path
         path = cls._path % {'_org_id': org_id, '_id': id_}
         result =  cls._api.get_json(path)
-        data = result[result.keys()[0]]
+        type_ = result.keys()[0]
+        data = result[type_]
+        data['type'] = type_
         return cls.from_dict(data)
     
     @classmethod
@@ -139,6 +144,7 @@ class Book(SubledgerBase):
         self = cls(org, data['description'], data.get('reference'))
         self._id = data['id']
         self._version = data['version']
+        self._set_type(data['type'])
         return self
     
     def __repr__(self):
@@ -153,7 +159,7 @@ class Account(SubledgerBase):
     This is the accounting book than can be used for a single asset.
     """
     _path = '/orgs/%(_org_id)s/books/%(_book_id)s/accounts/%(_id)s'
-    types = ('active_account', 'archived_account')
+    _types = ('active_account', 'archived_account')
     
     def __init__(
         self, book, description, normal_balance='credit', reference=None):
@@ -187,6 +193,7 @@ class Account(SubledgerBase):
                 'description':description, 'limit': limit}
         result = cls._api.get_json(path, data)
         for v in result['%s_accounts' % state]:
+            v['type'] = "%s_account" % state
             # Add org_id to the data, it is not returned by Subledger
             v['org'] = book._org_id
             yield cls.from_dict(v)
@@ -204,9 +211,12 @@ class Account(SubledgerBase):
                             '_book_id': book_id,
                             '_id': id_}
         result =  cls._api.get_json(path)
-        data = result[result.keys()[0]]
+        
+        type_ = result.keys()[0]
+        data = result[type_]
         # Add org_id to the data, it is not returned by Subledger
         data['org'] = org_id
+        data['type'] = type_
         return cls.from_dict(data)
     
     @classmethod
@@ -227,6 +237,7 @@ class Account(SubledgerBase):
                    data.get('reference'))
         self._id = data['id']
         self._version = data['version']
+        self._set_type(data['type'])
         return self
     
     def __repr__(self):
@@ -235,3 +246,10 @@ class Account(SubledgerBase):
         signature = "Account(%(book)r, %(description)s, "\
             "%(normal_balance)s) %(_id)s"
         return signature % data
+
+
+class JournalEntry(SubledgerBase):
+    """ """
+    @property
+    def is_posted(self):
+        return self._type.startswith('posted')

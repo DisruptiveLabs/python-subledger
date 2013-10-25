@@ -4,6 +4,7 @@ Under the hood base classes and functionality
 TODO: use logging module and log http request under debug level
 """
 import requests
+import logging
 
 
 class Dummy:
@@ -35,13 +36,11 @@ def memoize_from_dict(func):
 
     def memoizer(cls, dictionary):
         id_ = dictionary['id']
-        print id_, id_ in cls._instance_index
         if id_ in cls._instance_index:
             return cls._instance_index[id_]
         else:
             instance = func(cls, dictionary)
             cls._instance_index[id_] = instance
-            print 'MEM', id_
         return instance
     return memoizer
 
@@ -68,7 +67,7 @@ class Access(object):
         """ """
         url = self.api_url + path
         auth=(self._key_id, self._secret)
-        print 'REQ', url
+        logging.info(url)
         r = req_func(url, auth=auth, **kwargs)
         # TODO: Error handling
         if r.status_code in (200, 201):
@@ -92,19 +91,27 @@ class SubledgerBase(object):
         # Values to be determined by Subledger
         self._id = None
         self._version = None
-        self._status = 'active'
+        self._type = 'active'
     
     @classmethod
     def authenticate(cls, key_id, secret):
         SubledgerBase._api = Access(key_id, secret)
     
-    #def archive(self):
-        #"""Archive this instance in Subledger. 
+    def archive(self):
+        """Archive this instance in Subledger. 
         
-        #Can be called on any instance of Organization, Book,
-        #Account, JournalEntry, Line, Category, Report
-        #"""
-        #path = "%s/archive" % self.api
+        Can be called on any instance of Organization, Book,
+        Account, JournalEntry, Line, Category, Report
+        """
+        path = self._path % self.__dict__
+        path += "/archive"
+        result = self._api.post_json(path, {})
+        # Remember the type for its state
+        self._set_type(result.keys()[0])
+    
+    @property
+    def is_active(self):
+        return self._type.startswith('active')
         
     def save(self):
         """Write data to Subledger 
@@ -130,14 +137,19 @@ class SubledgerBase(object):
             result = self._api.post_json(path, data)
         
         type_ = result.keys()[0]
-        if type_ not in self.types:
-            msg = u'Subledger type `%s` not in types %s'
-            raise ValueError(msg % (type_, self.types))
+        self._set_type(type_)
         # Store metadata on self
         self._id = result[type_]['id']
         self._version = result[type_]['version']
         # Return True if it was created, False on update
         return self._id != old_id
+    
+    def _set_type(self, type_):
+        if type_ in self._types:
+            self._type = type_
+        else:
+            msg = u'Subledger type `%s` not in types %s'
+            raise ValueError(msg % (type_, self._types))
 
     @classmethod
     def from_id(cls):

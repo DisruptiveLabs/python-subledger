@@ -9,11 +9,13 @@ id: ivMaXfSHBQ9hBq5igz5nU1
 
 
 """
-
 from models import Organization, Book, Account
 
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    
     (id_, secret) = file('subledger.secret').read().strip().split()
     Organization.authenticate(id_, secret)
     
@@ -30,11 +32,10 @@ if __name__ == "__main__":
     #b.save()
     
     #b = Book.from_id(u'nFCZ2CIDfIkaY1f6b7bBG4', a._id)
-    for b in Book.all(o, state='active', action='starting'):
-        print b
-        for a in Account.all(b):
-            print a
-    
-    # Create account
-    #a.save()
-    print a._version
+    tmp = set()
+    for b in Book.all(o, state='archived'):
+        print b.description
+        print b.is_active
+    for b in Book.all(o, state='active'):
+        print b.description
+        print b.is_active
