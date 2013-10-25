@@ -10,7 +10,7 @@ id: ivMaXfSHBQ9hBq5igz5nU1
 
 """
 
-from models import Book, Organization
+from models import Organization, Book, Account
 
 
 if __name__ == "__main__":
@@ -32,4 +32,9 @@ if __name__ == "__main__":
     #b = Book.from_id(u'nFCZ2CIDfIkaY1f6b7bBG4', a._id)
     for b in Book.all(o, state='active', action='starting'):
         print b
+        for a in Account.all(b):
+            print a
     
+    # Create account
+    #a.save()
+    print a._version

@@ -21,7 +21,7 @@ DONE: let each object have Singleton behaviour based on it's ID. This way \
       identity.
       
 """
-from base import memoize
+from base import memoize, memoize_from_dict
 from base import Dummy, SubledgerBase
 
 
@@ -32,20 +32,9 @@ class Organization(SubledgerBase):
     example, the organization "Bitmymoney.com" can have 2 accounting Books:
     EUR and XBT. For transactions in euro and bitcoin respectively.
     """
-    path = '/orgs'
+    _path = '/orgs/%(_id)s'
     types = ('active_org', 'archived_org')
     
-    def save(self):
-        """Store Organization instance in Subledger 
-        
-        The `id` will be created by Subledger for a new Organization.
-        
-        `description` and `reference` will taken from the instance.
-        `version` will be incremented automatically.
-        """
-        path = self.path + '/%s' % self._id or ''
-        return self._save(path, {})
-
     @classmethod
     @memoize
     def from_id(cls, id_): #, org_id=None, book_id=None, *args, **kwargs):
@@ -55,8 +44,8 @@ class Organization(SubledgerBase):
         be used to build the ReST path.
         """
         # Build path
-        path = '%s/%s' % (cls.path, id_)
-        result =  cls.api.get_json(path)
+        path = cls._path % {'_id': id_}
+        result =  cls._api.get_json(path)
         data = result[result.keys()[0]]
         # Create instance
         self = cls(data['description'], data.get('reference'))
@@ -65,6 +54,7 @@ class Organization(SubledgerBase):
         return self
     
     @classmethod
+    @memoize_from_dict
     def from_dict(cls, data):
         """Instantiate a Organization from a Subledger representation 
         
@@ -86,7 +76,8 @@ class Book(SubledgerBase):
     
     This is the accounting book than can be used for a single asset.
     """
-    path = '/orgs/%(org_id)s/books/%(book_id)s'
+    _path = '/orgs/%(_org_id)s/books/%(_id)s'
+#    path = '/orgs/%(_org_id)s/books/%(_id)s'
     types = ('active_book', 'archived_book')
     
     def __init__(self, org, description, reference=None):
@@ -103,28 +94,19 @@ class Book(SubledgerBase):
         """Return the organization that owns this Book """
         # Organization will return itself from cache or load from Subledger
         return Organization.from_id(self._org_id)
-        
-    def save(self):
-        """Store Book instance in Subledger 
-        
-        The `id` will be created by Subledger for a new Book.
-        
-        `description` and `reference` will taken from the instance.
-        `version` will be incremented automatically.
-        """
-        path = self.path % {'org_id': self._org._id,
-                             'book_id': self._id or ''}
-        return self._save(path, {})
     
     @classmethod
     def all(
         cls, organization, state='active',
         action='starting', id_=None, description=None, limit=None):
-        """Iterate over all books for given organization """
-        path = cls.path % {'org_id': organization._id, 'book_id': ''}
+        """Iterate over books for given organization
+        
+        Filter results with the parameters.
+        """
+        path = cls._path % {'_org_id': organization._id, '_id': ''}
         data = {'state': state, 'action': action, 'id': id_,
                 'description':description, 'limit': limit}
-        result = cls.api.get_json(path, data)
+        result = cls._api.get_json(path, data)
         for v in result['%s_books' % state]:
             yield cls.from_dict(v)
     
@@ -137,12 +119,13 @@ class Book(SubledgerBase):
         be used to build the ReST path.
         """
         # Build path
-        path = cls.path % {'org_id': org_id, 'book_id': id_}
-        result =  cls.api.get_json(path)
+        path = cls._path % {'_org_id': org_id, '_id': id_}
+        result =  cls._api.get_json(path)
         data = result[result.keys()[0]]
         return cls.from_dict(data)
     
     @classmethod
+    @memoize_from_dict
     def from_dict(cls, data):
         """Instantiate a Book from a Subledger representation 
         
@@ -169,7 +152,7 @@ class Account(SubledgerBase):
     
     This is the accounting book than can be used for a single asset.
     """
-    path = '/orgs/%(org_id)s/books/%(book_id)s/%(account_id)s'
+    _path = '/orgs/%(_org_id)s/books/%(_book_id)s/accounts/%(_id)s'
     types = ('active_account', 'archived_account')
     
     def __init__(
@@ -180,7 +163,7 @@ class Account(SubledgerBase):
         """
         super(Account, self).__init__(description, reference)
         # Account specific fields
-        self._org_id = book.org_id
+        self._org_id = book._org_id
         self._book_id = book._id
         # Debit or Credit account?
         self.normal_balance = normal_balance # 'debit' or 'credit'
@@ -190,31 +173,19 @@ class Account(SubledgerBase):
         """Return the Book that this account exists in """
         # Book will return itself from cache or load from Subledger
         return Book.from_id(self._book_id, self._org_id)
-        
-    def save(self):
-        """Store Account instance in Subledger 
-        
-        The `id` will be created by Subledger for a new Account.
-        
-        `description` and `reference` will taken from the instance.
-        `version` will be incremented automatically.
-        """
-        path = self.path % {'org_id': self.book._org._id,
-                             'book_id': self.book._id,
-                             'account_id': self._id or ''}
-        # Book specific attributes
-        data = {'normal_balance': self.normal_balance}
-        return self._save(path, data)
     
     @classmethod
     def all(
         cls, book, state='active',
         action='starting', id_=None, description=None, limit=None):
-        """Iterate over all accounts within given book """
-        path = cls.path % {'org_id': book._org_id, 'book_id': book._id}
+        """Iterate over accounts within given book 
+        
+        Filter results with the parameters.
+        """
+        path = cls._path % {'_org_id': book._org_id,'_book_id': book._id, '_id': ''}
         data = {'state': state, 'action': action, 'id': id_,
                 'description':description, 'limit': limit}
-        result = cls.api.get_json(path, data)
+        result = cls._api.get_json(path, data)
         for v in result['%s_accounts' % state]:
             # Add org_id to the data, it is not returned by Subledger
             v['org'] = book._org_id
@@ -229,18 +200,19 @@ class Account(SubledgerBase):
         It will be used to build the ReST path to the Account resource.
         """
         # Build path
-        path = cls.path % {'org_id': org_id,
-                           'book_id': book_id,
-                           'account_id': id_}
-        result =  cls.api.get_json(path)
+        path = cls._path % {'_org_id': org_id,
+                            '_book_id': book_id,
+                            '_id': id_}
+        result =  cls._api.get_json(path)
         data = result[result.keys()[0]]
         # Add org_id to the data, it is not returned by Subledger
         data['org'] = org_id
         return cls.from_dict(data)
     
     @classmethod
+    @memoize_from_dict
     def from_dict(cls, data):
-        """Instantiate a Book from a Subledger representation 
+        """Instantiate an Account from a Subledger representation 
         
         All data should be in the dictionary `data`
         This method will not query Subledger
@@ -262,4 +234,4 @@ class Account(SubledgerBase):
         data['book'] = Book.from_id(self._book_id, self._org_id)
         signature = "Account(%(book)r, %(description)s, "\
             "%(normal_balance)s) %(_id)s"
-        return signature % self.__dict__
+        return signature % data

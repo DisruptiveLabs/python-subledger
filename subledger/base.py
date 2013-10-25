@@ -27,6 +27,24 @@ def memoize(func):
         return instance
     return memoizer
 
+def memoize_from_dict(func):
+    """ Memorize instances by id, passed in a dictionary
+    
+    Apply this decorator on the from_dict class method
+    """
+
+    def memoizer(cls, dictionary):
+        id_ = dictionary['id']
+        print id_, id_ in cls._instance_index
+        if id_ in cls._instance_index:
+            return cls._instance_index[id_]
+        else:
+            instance = func(cls, dictionary)
+            cls._instance_index[id_] = instance
+            print 'MEM', id_
+        return instance
+    return memoizer
+
 
 class Access(object):
     """Client access to your Subledger account
@@ -60,19 +78,10 @@ class Access(object):
 
 
 class SubledgerBase(object):
-    """Provide access to a Subledger object 
-    
-    Before using the Subledger classes, instantiate an Access object
-    >>> a = Access(key_id, secret)
-    >>> SubledgerBase.api = a
-    
-    Example:
-    >>> o = Organization('Belastingdienst')
-    >>> o.save()
-    
-    Organization will be saved to our subledger book.
+    """Base class for shared functionality of Subledger classes
     """
-    api = None
+    _api = None
+    _path = ''
     # Object ID's are globally unique, so we can index these
     _instance_index = {}
     
@@ -83,32 +92,42 @@ class SubledgerBase(object):
         # Values to be determined by Subledger
         self._id = None
         self._version = None
+        self._status = 'active'
     
     @classmethod
     def authenticate(cls, key_id, secret):
-        SubledgerBase.api = Access(key_id, secret)
+        SubledgerBase._api = Access(key_id, secret)
     
     #def archive(self):
-        ## TODO: finisch this
-        #path = self.api
+        #"""Archive this instance in Subledger. 
         
-    def _save(self, path, data):
+        #Can be called on any instance of Organization, Book,
+        #Account, JournalEntry, Line, Category, Report
+        #"""
+        #path = "%s/archive" % self.api
+        
+    def save(self):
         """Write data to Subledger 
         
         POST on new instance
         UPDATE when info has changed
         """
-        # Read 
-        data.update({'description': self.description,
-                     'reference': self.reference,})
-        _old = self._id
+        # Build path
+        data = self.__dict__.copy()
+        data['_id'] = self._id or ''
+        path = self._path % data
+        # Pop private keys
+        for k in data.keys():
+            if k.startswith('_'):
+                del data[k]
+        old_id = self._id
         if self._id:
             data['version'] = self._version + 1
             # Update existing
-            result = self.api.patch_json(path, data)
+            result = self._api.patch_json(path, data)
         else:
             # Create new instance
-            result = self.api.post_json(path, data)
+            result = self._api.post_json(path, data)
         
         type_ = result.keys()[0]
         if type_ not in self.types:
@@ -117,8 +136,8 @@ class SubledgerBase(object):
         # Store metadata on self
         self._id = result[type_]['id']
         self._version = result[type_]['version']
-        # Return True is it was created, False on update
-        return _old is None
+        # Return True if it was created, False on update
+        return self._id != old_id
 
     @classmethod
     def from_id(cls):
