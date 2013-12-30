@@ -12,5 +12,5 @@ setup(
     description='Python client for the Subledger in-app accounting service.',
     long_description=open('README.md').read(),
     zip_safe=False,
-    packages=find_packages(),
+#    packages=find_packages(),
 )

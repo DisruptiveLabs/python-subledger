@@ -1,14 +1,13 @@
 """\
 Subledger API accounting models
 
-
-TODO: .archive() and .activate() on SubledgerBase
-
 TODO: JournalEntry model
 TODO: Category model
 TODO: Report model
 
 Nice to haves
+DONE: .archive() and .activate() on SubledgerBase
+
 DONE: store _org_id in Book
       use property to load the Org on lookup
       self._org_id = '8750282098'
@@ -57,7 +56,7 @@ class Organization(SubledgerBase):
     
     @classmethod
     @memoize_from_dict
-    def from_dict(cls, data):
+    def _from_dict(cls, data):
         """Instantiate a Organization from a Subledger representation 
         
         All data should be in the dictionary `data`
@@ -111,7 +110,7 @@ class Book(SubledgerBase):
         result = cls._api.get_json(path, data)
         for v in result['%s_books' % state]:
             v['type'] = "%s_book" % state
-            yield cls.from_dict(v)
+            yield cls._from_dict(v)
     
     @classmethod
     @memoize
@@ -127,11 +126,11 @@ class Book(SubledgerBase):
         type_ = result.keys()[0]
         data = result[type_]
         data['type'] = type_
-        return cls.from_dict(data)
+        return cls._from_dict(data)
     
     @classmethod
     @memoize_from_dict
-    def from_dict(cls, data):
+    def _from_dict(cls, data):
         """Instantiate a Book from a Subledger representation 
         
         All data should be in the dictionary `data`
@@ -196,7 +195,7 @@ class Account(SubledgerBase):
             v['type'] = "%s_account" % state
             # Add org_id to the data, it is not returned by Subledger
             v['org'] = book._org_id
-            yield cls.from_dict(v)
+            yield cls._from_dict(v)
     
     @classmethod
     @memoize
@@ -217,11 +216,11 @@ class Account(SubledgerBase):
         # Add org_id to the data, it is not returned by Subledger
         data['org'] = org_id
         data['type'] = type_
-        return cls.from_dict(data)
+        return cls._from_dict(data)
     
     @classmethod
     @memoize_from_dict
-    def from_dict(cls, data):
+    def _from_dict(cls, data):
         """Instantiate an Account from a Subledger representation 
         
         All data should be in the dictionary `data`

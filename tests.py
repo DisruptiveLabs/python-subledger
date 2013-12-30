@@ -1,33 +1,140 @@
 # -*- coding: utf-8 -*-
+"""\
+Test the Subledger Python API functionality
 
-
-
+Identity created for this purpose
+{
+  "active_identity": {
+    "id": "tVlYHmPf35IncGiqfhMuT3",
+    "email": "r.r.nederhoed@gmail.com",
+    "description": "Identity for automated Unit testing",
+    "version": 1
+  },
+  "active_key": {
+    "id": "5AQT3d51VIZH6G778afB37",
+    "identity": "tVlYHmPf35IncGiqfhMuT3",
+    "secret": "ybLmLioCNSji8PsByWzxn2"
+  }
+}
+"""
 import random
 import unittest
+import logging
+logger = logging.getLogger()
+logger.setLevel('DEBUG')
 
-class TestSequenceFunctions(unittest.TestCase):
+from subledger.models import Organization, Book
 
+# Setup the test account
+API_KEY = '5AQT3d51VIZH6G778afB37'
+SECRET = 'ybLmLioCNSji8PsByWzxn2'
+
+class TestOrganization(unittest.TestCase):
     def setUp(self):
-        self.seq = range(10)
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.company_name = 'ACME Inc.'
+        self.reference = 'https://www.acme.com/'
+        self.org = Organization(self.company_name, self.reference)
+    
+    def test_constructor(self):
+        # Attribute values
+        self.assertEqual(self.org.description, self.company_name)
+        self.assertEqual(self.org.reference, self.reference)
+    
+    def test_new_or_not(self):
+        # New company, not in Subledger
+        self.assertEqual(self.org._id, None)
+        new = self.org.save()
+        self.assertEqual(new, True)
+        new = self.org.save()
+        self.assertEqual(new, False)
 
-    def test_shuffle(self):
-        # make sure the shuffled sequence does not lose any elements
-        random.shuffle(self.seq)
-        self.seq.sort()
-        self.assertEqual(self.seq, range(10))
 
-        # should raise an exception for an immutable sequence
-        self.assertRaises(TypeError, random.shuffle, (1,2,3))
+class TestOrganizationLoad(unittest.TestCase):
+    def setUp(self):
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.company_name = 'ACME Inc.'
+        self.reference = 'https://www.acme.com/'
+        self.org = Organization(self.company_name, self.reference)
+        self.org.save()
 
-    def test_choice(self):
-        element = random.choice(self.seq)
-        self.assertTrue(element in self.seq)
+    def test_from_id(self):
+        retrieved = Organization.from_id(self.org._id)
+        self.assertIs(retrieved, self.org)
+    
+    def test_from_dict_index(self):
+        retrieved = Organization._from_dict({'id': self.org._id})
+        # Identity
+        self.assertIs(retrieved, self.org)
+    
+    def test_from_dict(self):
+        org = Organization._from_dict(
+            {'id': None,
+             'version': self.org._version,
+             'type': self.org._type,
+             'description': self.company_name,
+             'reference': self.reference})
+        # Attribute values
+        self.assertEqual(org.description, self.company_name)
+        self.assertEqual(org.reference, self.reference)
+        # Identity
+        self.assertIsNot(org, self.org)
 
-    def test_sample(self):
-        with self.assertRaises(ValueError):
-            random.sample(self.seq, 20)
-        for element in random.sample(self.seq, 5):
-            self.assertTrue(element in self.seq)
+
+class TestOrganizationArchive(unittest.TestCase):
+    def setUp(self):
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.company_name = 'ACME Inc.'
+        self.reference = 'https://www.acme.com/'
+        self.org = Organization(self.company_name, self.reference)
+        self.org.save()
+    
+    def test_active_by_default(self):
+        self.assertEqual(self.org.is_active, True)
+    
+    def test_archive_and_activate(self):
+        self.assertEqual(self.org.is_active, True)
+        self.org.archive()  # Beware, this has immediate effect
+        self.assertEqual(self.org.is_active, False)
+        self.org.activate()  # Beware, this has immediate effect
+        self.assertEqual(self.org.is_active, True)
+
+class TestBook(unittest.TestCase):
+    def setUp(self):
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.org = Organization('ACME Inc.')
+        self.org.save()
+        self.book = Book(self.org, 'XBT')
+        self.book.save()
+
+    def test_from_id(self):
+        retrieved = Book.from_id(self.book._id, self.org._id)
+        self.assertIs(retrieved, self.book)
+    
+    def test_from_dict_index(self):
+        data = {'id': self.book._id, 'org': self.org._id}
+        logging.info(data)
+        retrieved = Book._from_dict(data)
+        # Identity
+        self.assertIs(retrieved, self.book)
+    
+    def test_from_dict(self):
+        book = Book._from_dict(
+            {'id': None,
+             'org': self.org._id,
+             'version': self.book._version,
+             'type': self.book._type,
+             'description': 'EUR'})
+        # Attribute values
+        self.assertEqual(book.description, 'EUR')
+        self.assertEqual(book.reference, None)
+        # Identity
+        self.assertIsNot(book, self.book)
+
 
 if __name__ == '__main__':
     unittest.main()

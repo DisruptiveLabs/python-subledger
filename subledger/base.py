@@ -21,6 +21,8 @@ def memoize(func):
 
     def memoizer(cls, id_, *args, **kwargs):
         if id_ in cls._instance_index:
+            if cls is not type(cls._instance_index[id_]):
+                raise TypeError('Instance with ID does not match class')
             return cls._instance_index[id_]
         else:
             instance = func(cls, id_, *args, **kwargs)
@@ -37,6 +39,9 @@ def memoize_from_dict(func):
     def memoizer(cls, dictionary):
         id_ = dictionary['id']
         if id_ in cls._instance_index:
+            # Ignore other values in dictionary when 'id' is present
+            if cls is not type(cls._instance_index[id_]):
+                raise TypeError('Instance with ID does not match class')
             return cls._instance_index[id_]
         else:
             instance = func(cls, dictionary)
@@ -58,16 +63,18 @@ class Access(object):
         return self._json_request(requests.get, path, params=data)
     
     def post_json(self, path, data):
+        logging.debug('POST: %s' % (data,))
         return self._json_request(requests.post, path, data=data)
     
     def patch_json(self, path, data):
+        logging.debug('PATCH: %s' % (data,))
         return self._json_request(requests.patch, path, data=data)
         
     def _json_request(self, req_func, path, **kwargs):
         """ """
         url = self.api_url + path
-        auth=(self._key_id, self._secret)
-        logging.info(url)
+        auth = (self._key_id, self._secret)
+        logging.info("%s (API_KEY: %s)" % (url, self._key_id))
         r = req_func(url, auth=auth, **kwargs)
         # TODO: Error handling
         if r.status_code in (200, 201):
@@ -95,6 +102,7 @@ class SubledgerBase(object):
     
     @classmethod
     def authenticate(cls, key_id, secret):
+        # TODO: refactor
         SubledgerBase._api = Access(key_id, secret)
     
     def archive(self):
@@ -109,8 +117,21 @@ class SubledgerBase(object):
         # Remember the type for its state
         self._set_type(result.keys()[0])
     
+    def activate(self):
+        """Activate this instance in Subledger. 
+        
+        Can be called on any instance of Organization, Book,
+        Account, JournalEntry, Line, Category, Report
+        """
+        path = self._path % self.__dict__
+        path += "/activate"
+        result = self._api.post_json(path, {})
+        # Remember the type for its state
+        self._set_type(result.keys()[0])
+    
     @property
     def is_active(self):
+        # TODO: Think about behavior with unsaved objects: True, False or None
         return self._type.startswith('active')
         
     def save(self):
@@ -123,6 +144,7 @@ class SubledgerBase(object):
         data = self.__dict__.copy()
         data['_id'] = self._id or ''
         path = self._path % data
+        path = path.rstrip('/')  # a trailing slash led to UNAUTHORIZED errors
         # Pop private keys
         for k in data.keys():
             if k.startswith('_'):
@@ -141,6 +163,8 @@ class SubledgerBase(object):
         # Store metadata on self
         self._id = result[type_]['id']
         self._version = result[type_]['version']
+        # Index object for fast retrieval (and guarantee single occurance)
+        SubledgerBase._instance_index[self._id] = self
         # Return True if it was created, False on update
         return self._id != old_id
     
@@ -157,8 +181,11 @@ class SubledgerBase(object):
         raise NotImplementedError('Each class should implement from_id')
 
     @classmethod
-    def from_dict(cls):
-        """Create instance from values without contacting Subledger """
+    def _from_dict(cls):
+        """Create instance from values without contacting Subledger 
+        
+        This is a helper function not intended to be used on its own.
+        """
         raise NotImplementedError('Each class should implement from_dict')
 
     def __unicode__(self):

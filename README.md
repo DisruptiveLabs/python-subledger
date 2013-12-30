@@ -6,9 +6,14 @@ Python implementation of the Subledger.com API for double entry accounting
 Documentation and API endpoint: https://api.subledger.com/
 
 ### Beware ###
-This library is experimental and unfinished. Do not rely on it.
+This library is experimental and unfinished. Do not rely on it (yet).
 
 Feel free to suggest code changes or features!
+
+The base for working with Subledger is an Organization. You can get yourself an 
+identity (user) with Subledger. With this identity and an API key, you can 
+create an Organization. The Organization will house accounting Books and journal 
+entries.
 
 Implemented:
 * Organization
@@ -19,9 +24,10 @@ Todo:
 * JournalEntry
 * Category
 * Report
-* Identity (nice to have)
 * ReportRenderings (nice to have)
 
+Will not do:
+* Identity (nice to have)
 
 ## Usage ##
 
