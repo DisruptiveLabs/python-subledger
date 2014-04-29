@@ -3,8 +3,9 @@ Under the hood base classes and functionality
 
 TODO: use logging module and log http request under debug level
 """
-import requests
 import logging
+
+import requests
 
 
 class Dummy:
@@ -28,7 +29,9 @@ def memoize(func):
             instance = func(cls, id_, *args, **kwargs)
             cls._instance_index[id_] = instance
         return instance
+
     return memoizer
+
 
 def memoize_from_dict(func):
     """ Memorize instances by id, passed in a dictionary
@@ -47,29 +50,45 @@ def memoize_from_dict(func):
             instance = func(cls, dictionary)
             cls._instance_index[id_] = instance
         return instance
+
     return memoizer
 
 
 class Access(object):
     """Client access to your Subledger account
     """
+
     def __init__(self, key_id, secret):
         """ """
         self._key_id = key_id
         self._secret = secret
         self.api_url = "https://api.subledger.com/v1"
-    
+
+    def create_new_identity(self, email, description, reference=None):
+        logging.debug('Access.create_identity')
+        logging.debug('email: %s', email)
+        logging.debug('description: %s', email)
+        logging.debug('reference: %s', email)
+        data = {'email': email, 'description': description, 'reference': reference}
+        path = '/identities'
+        result = self.post_json(path=path, data=data)
+        logging.debug('result: %s', result)
+        self._key_id = result['active_key']['id']
+        self._secret = result['active_key']['secret']
+        return (self._key_id, self._secret)
+
+
     def get_json(self, path, data=None):
         return self._json_request(requests.get, path, params=data)
-    
+
     def post_json(self, path, data):
         logging.debug('POST: %s' % (data,))
         return self._json_request(requests.post, path, data=data)
-    
+
     def patch_json(self, path, data):
         logging.debug('PATCH: %s' % (data,))
         return self._json_request(requests.patch, path, data=data)
-        
+
     def _json_request(self, req_func, path, **kwargs):
         """ """
         url = self.api_url + path
@@ -90,7 +109,7 @@ class SubledgerBase(object):
     _path = ''
     # Object ID's are globally unique, so we can index these
     _instance_index = {}
-    
+
     def __init__(self, description, reference=None):
         # Attributes available on all 
         self.description = description
@@ -99,12 +118,12 @@ class SubledgerBase(object):
         self._id = None
         self._version = None
         self._type = 'active'
-    
+
     @classmethod
     def authenticate(cls, key_id, secret):
         # TODO: refactor
         SubledgerBase._api = Access(key_id, secret)
-    
+
     def archive(self):
         """Archive this instance in Subledger. 
         
@@ -116,7 +135,7 @@ class SubledgerBase(object):
         result = self._api.post_json(path, {})
         # Remember the type for its state
         self._set_type(result.keys()[0])
-    
+
     def activate(self):
         """Activate this instance in Subledger. 
         
@@ -128,12 +147,12 @@ class SubledgerBase(object):
         result = self._api.post_json(path, {})
         # Remember the type for its state
         self._set_type(result.keys()[0])
-    
+
     @property
     def is_active(self):
         # TODO: Think about behavior with unsaved objects: True, False or None
         return self._type.startswith('active')
-        
+
     def save(self):
         """Write data to Subledger 
         
@@ -157,7 +176,7 @@ class SubledgerBase(object):
         else:
             # Create new instance
             result = self._api.post_json(path, data)
-        
+
         type_ = result.keys()[0]
         self._set_type(type_)
         # Store metadata on self
@@ -167,7 +186,7 @@ class SubledgerBase(object):
         SubledgerBase._instance_index[self._id] = self
         # Return True if it was created, False on update
         return self._id != old_id
-    
+
     def _set_type(self, type_):
         if type_ in self._types:
             self._type = type_
