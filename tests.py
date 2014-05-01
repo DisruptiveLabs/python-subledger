@@ -17,6 +17,7 @@ Identity created for this purpose
   }
 }
 """
+import datetime
 import unittest
 import logging
 
@@ -24,7 +25,7 @@ logger = logging.getLogger()
 logger.setLevel('DEBUG')
 
 from subledger.base import Access
-from subledger.models import Organization, Book
+from subledger.models import Organization, Book, Account
 
 # Setup the test account
 API_KEY = None
@@ -155,6 +156,76 @@ class TestBook(unittest.TestCase):
         self.assertEqual(book.reference, None)
         # Identity
         self.assertIsNot(book, self.book)
+
+
+class TestAccount(unittest.TestCase):
+    def setUp(self):
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.org = Organization('ACME Inc.')
+        self.org.save()
+        self.book = Book(self.org, 'USD')
+        self.book.save()
+        self.account = Account(book=self.book,
+                               description='1210 Accounts Receivable',
+                               normal_balance='debit')
+        save_result = self.account.save()
+        assert save_result == True
+
+
+    def test_balance(self):
+        at_datetime_utc = datetime.datetime.utcnow()
+        balance_result = self.account.get_balance(at_datetime_utc=at_datetime_utc)
+        self.assertIsNotNone(balance_result)
+        self.assertIn('balance', balance_result)
+        balance = balance_result['balance']
+
+        self.assertIn('debit_value', balance)
+        self.assertIn('type', balance['debit_value'])
+
+        self.assertEqual(balance['debit_value']['type'], 'zero')
+        self.assertIn('amount', balance['debit_value'])
+        self.assertEqual(balance['debit_value']['amount'], '0')
+
+        self.assertIn('credit_value', balance)
+        self.assertIn('type', balance['credit_value'])
+        self.assertEqual(balance['credit_value']['type'], 'zero')
+        self.assertIn('amount', balance['credit_value'])
+        self.assertEqual(balance['credit_value']['amount'], '0')
+
+        self.assertIn('value', balance)
+        self.assertIn('type', balance['value'])
+        self.assertEqual(balance['value']['type'], 'zero')
+        self.assertIn('amount', balance['value'])
+        self.assertEqual(balance['value']['amount'], '0')
+
+
+    def test_from_id(self):
+        retrieved = Account.from_id(self.account._id, self.book._id)
+        self.assertIs(retrieved, self.account)
+
+
+    def test_from_dict_index(self):
+        data = {'id': self.account._id, 'book': self.book._id}
+        logging.info(data)
+        retrieved = Account._from_dict(data)
+        # Identity
+        self.assertIs(retrieved, self.account)
+
+    def test_from_dict(self):
+        account = Account._from_dict(
+            {'id': None,
+             'book': self.book._id,
+             'org': self.org._id,
+             'version': self.account._version,
+             'type': self.account._type,
+             'normal_balance': self.account.normal_balance,
+             'description': '1210 Accounts Receivable'})
+        # Attribute values
+        self.assertEqual(account.description, '1210 Accounts Receivable')
+        self.assertEqual(account.reference, None)
+        # Identity
+        self.assertIsNot(account, self.account)
 
 
 if __name__ == '__main__':

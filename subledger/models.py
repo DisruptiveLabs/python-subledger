@@ -33,7 +33,7 @@ class Organization(SubledgerBase):
     """
     _path = '/orgs/%(_id)s'
     _types = ('active_org', 'archived_org')
-    
+
     @classmethod
     @memoize
     def from_id(cls, id_):
@@ -53,7 +53,7 @@ class Organization(SubledgerBase):
         self._version = data['version']
         self._set_type(type_)
         return self
-    
+
     @classmethod
     @memoize_from_dict
     def _from_dict(cls, data):
@@ -68,7 +68,7 @@ class Organization(SubledgerBase):
         self._version = data['version']
         self._set_type(data['type'])
         return self
-    
+
     def __repr__(self):
         return "Organization(%(description)s) %(_id)s" % self.__dict__
 
@@ -80,7 +80,7 @@ class Book(SubledgerBase):
     """
     _path = '/orgs/%(_org_id)s/books/%(_id)s'
     _types = ('active_book', 'archived_book')
-    
+
     def __init__(self, org, description, reference=None):
         """Create an accounting book for the given Organization.
         
@@ -89,13 +89,13 @@ class Book(SubledgerBase):
         super(Book, self).__init__(description, reference)
         # Book specific fields
         self._org_id = org._id  # Rember the org_id
-    
+
     @property
     def organization(self):
         """Return the organization that owns this Book """
         # Organization will return itself from cache or load from Subledger
         return Organization.from_id(self._org_id)
-    
+
     @classmethod
     def all(
         cls, organization, state='active',
@@ -111,7 +111,7 @@ class Book(SubledgerBase):
         for v in result['%s_books' % state]:
             v['type'] = "%s_book" % state
             yield cls._from_dict(v)
-    
+
     @classmethod
     @memoize
     def from_id(cls, id_, org_id):
@@ -127,7 +127,7 @@ class Book(SubledgerBase):
         data = result[type_]
         data['type'] = type_
         return cls._from_dict(data)
-    
+
     @classmethod
     @memoize_from_dict
     def _from_dict(cls, data):
@@ -145,7 +145,7 @@ class Book(SubledgerBase):
         self._version = data['version']
         self._set_type(data['type'])
         return self
-    
+
     def __repr__(self):
         data = self.__dict__.copy()
         data['organization'] = Organization.from_id(self._org_id)
@@ -159,7 +159,7 @@ class Account(SubledgerBase):
     """
     _path = '/orgs/%(_org_id)s/books/%(_book_id)s/accounts/%(_id)s'
     _types = ('active_account', 'archived_account')
-    
+
     def __init__(
         self, book, description, normal_balance='credit', reference=None):
         """Create an accounting book for the given Organization.
@@ -172,13 +172,23 @@ class Account(SubledgerBase):
         self._book_id = book._id
         # Debit or Credit account?
         self.normal_balance = normal_balance # 'debit' or 'credit'
-    
+
+    def get_balance(self, at_datetime_utc=None):
+        """Get the balance of an account.
+        at_datetime must be a datetime at UTC
+        """
+        path = self._path % self.__dict__
+        at_string = at_datetime_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+        path += "/balance?at=%s" % at_string
+        result = self._api.get_json(path, {})
+        return result
+
     @property
     def book(self):
         """Return the Book that this account exists in """
         # Book will return itself from cache or load from Subledger
         return Book.from_id(self._book_id, self._org_id)
-    
+
     @classmethod
     def all(
         cls, book, state='active',
@@ -196,7 +206,7 @@ class Account(SubledgerBase):
             # Add org_id to the data, it is not returned by Subledger
             v['org'] = book._org_id
             yield cls._from_dict(v)
-    
+
     @classmethod
     @memoize
     def from_id(cls, id_, org_id, book_id):
@@ -210,14 +220,14 @@ class Account(SubledgerBase):
                             '_book_id': book_id,
                             '_id': id_}
         result =  cls._api.get_json(path)
-        
+
         type_ = result.keys()[0]
         data = result[type_]
         # Add org_id to the data, it is not returned by Subledger
         data['org'] = org_id
         data['type'] = type_
         return cls._from_dict(data)
-    
+
     @classmethod
     @memoize_from_dict
     def _from_dict(cls, data):
@@ -238,7 +248,7 @@ class Account(SubledgerBase):
         self._version = data['version']
         self._set_type(data['type'])
         return self
-    
+
     def __repr__(self):
         data = self.__dict__.copy()
         data['book'] = Book.from_id(self._book_id, self._org_id)
