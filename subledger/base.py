@@ -4,6 +4,7 @@ Under the hood base classes and functionality
 TODO: use logging module and log http request under debug level
 """
 import logging
+import json
 
 import requests
 
@@ -83,11 +84,13 @@ class Access(object):
 
     def post_json(self, path, data):
         logging.debug('POST: %s' % (data,))
-        return self._json_request(requests.post, path, data=data)
+        json_data = json.dumps(data)
+        return self._json_request(requests.post, path, data=json_data)
 
     def patch_json(self, path, data):
         logging.debug('PATCH: %s' % (data,))
-        return self._json_request(requests.patch, path, data=data)
+        json_data = json.dumps(data)
+        return self._json_request(requests.patch, path, data=json_data)
 
     def _json_request(self, req_func, path, **kwargs):
         """ """
@@ -96,7 +99,7 @@ class Access(object):
         logging.info("%s (API_KEY: %s)" % (url, self._key_id))
         r = req_func(url, auth=auth, **kwargs)
         # TODO: Error handling
-        if r.status_code in (200, 201):
+        if r.status_code in (200, 201, 202):
             return r.json()
         else:
             raise ValueError(r.status_code, r.text)
