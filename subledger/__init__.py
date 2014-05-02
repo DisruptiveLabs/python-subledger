@@ -9,7 +9,7 @@ id: ivMaXfSHBQ9hBq5igz5nU1
 
 
 """
-from models import Organization, Book, Account
+from models import Organization, Book, Account, JournalEntry
 
 
 if __name__ == "__main__":
