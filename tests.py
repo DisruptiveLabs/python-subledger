@@ -25,7 +25,7 @@ logger = logging.getLogger()
 logger.setLevel('DEBUG')
 
 from subledger.base import Access
-from subledger.models import Organization, Book, Account
+from subledger.models import Organization, Book, Account, JournalEntry
 
 # Setup the test account
 API_KEY = None
@@ -226,6 +226,57 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(account.reference, None)
         # Identity
         self.assertIsNot(account, self.account)
+
+
+class TestJournalEntry(unittest.TestCase):
+    def setUp(self):
+        # Setup access to Subledger
+        Organization.authenticate(API_KEY, SECRET)
+        self.org = Organization('ACME Inc.')
+        self.org.save()
+        self.book = Book(self.org, 'USD')
+        self.book.save()
+        self.account_01 = Account(book=self.book,
+                                  description='1210 Accounts Receivable',
+                                  normal_balance='debit')
+        save_result = self.account_01.save()
+        assert save_result == True
+        self.account_02 = Account(book=self.book,
+                                  description='2110 Accounts Paypable',
+                                  normal_balance='credit')
+        save_result = self.account_02.save()
+        assert save_result == True
+
+        at_datetime_utc = datetime.datetime.utcnow()
+        effective_at = at_datetime_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+        lines = [
+            {
+                'account': self.account_01._id,
+                'value': {
+                    'type': 'debit',
+                    'amount': '10.00'
+                }
+            },
+            {
+                'account': self.account_02._id,
+                'value': {
+                    'type': 'credit',
+                    'amount': '10.00'
+                }
+            }
+        ]
+        self.journal_entry = JournalEntry(book=self.book,
+                                          description='Recharge account',
+                                          effective_at=effective_at,
+                                          lines=lines,
+                                          reference='http://acme.com/journal_entry/')
+        save_result = self.journal_entry.save()
+        self.assertTrue(save_result)
+
+
+    def test_from_id(self):
+        retrieved = JournalEntry.from_id(self.journal_entry._id, self.org._id, self.book._id)
+        self.assertIs(retrieved, self.journal_entry)
 
 
 if __name__ == '__main__':

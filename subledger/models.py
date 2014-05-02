@@ -44,7 +44,7 @@ class Organization(SubledgerBase):
         """
         # Build path
         path = cls._path % {'_id': id_}
-        result =  cls._api.get_json(path)
+        result = cls._api.get_json(path)
         type_ = result.keys()[0]
         data = result[type_]
         # Create instance
@@ -98,15 +98,15 @@ class Book(SubledgerBase):
 
     @classmethod
     def all(
-        cls, organization, state='active',
-        action='starting', id_=None, description=None, limit=None):
+            cls, organization, state='active',
+            action='starting', id_=None, description=None, limit=None):
         """Iterate over books for given organization
         
         Filter results with the parameters.
         """
         path = cls._path % {'_org_id': organization._id, '_id': ''}
         data = {'state': state, 'action': action, 'id': id_,
-                'description':description, 'limit': limit}
+                'description': description, 'limit': limit}
         result = cls._api.get_json(path, data)
         for v in result['%s_books' % state]:
             v['type'] = "%s_book" % state
@@ -122,7 +122,7 @@ class Book(SubledgerBase):
         """
         # Build path
         path = cls._path % {'_org_id': org_id, '_id': id_}
-        result =  cls._api.get_json(path)
+        result = cls._api.get_json(path)
         type_ = result.keys()[0]
         data = result[type_]
         data['type'] = type_
@@ -161,7 +161,7 @@ class Account(SubledgerBase):
     _types = ('active_account', 'archived_account')
 
     def __init__(
-        self, book, description, normal_balance='credit', reference=None):
+            self, book, description, normal_balance='credit', reference=None):
         """Create an accounting book for the given Organization.
         
         `book` should be passed as an instance of Book
@@ -171,7 +171,7 @@ class Account(SubledgerBase):
         self._org_id = book._org_id
         self._book_id = book._id
         # Debit or Credit account?
-        self.normal_balance = normal_balance # 'debit' or 'credit'
+        self.normal_balance = normal_balance  # 'debit' or 'credit'
 
     def get_balance(self, at_datetime_utc=None):
         """Get the balance of an account.
@@ -191,15 +191,15 @@ class Account(SubledgerBase):
 
     @classmethod
     def all(
-        cls, book, state='active',
-        action='starting', id_=None, description=None, limit=None):
+            cls, book, state='active',
+            action='starting', id_=None, description=None, limit=None):
         """Iterate over accounts within given book 
         
         Filter results with the parameters.
         """
-        path = cls._path % {'_org_id': book._org_id,'_book_id': book._id, '_id': ''}
+        path = cls._path % {'_org_id': book._org_id, '_book_id': book._id, '_id': ''}
         data = {'state': state, 'action': action, 'id': id_,
-                'description':description, 'limit': limit}
+                'description': description, 'limit': limit}
         result = cls._api.get_json(path, data)
         for v in result['%s_accounts' % state]:
             v['type'] = "%s_account" % state
@@ -219,7 +219,7 @@ class Account(SubledgerBase):
         path = cls._path % {'_org_id': org_id,
                             '_book_id': book_id,
                             '_id': id_}
-        result =  cls._api.get_json(path)
+        result = cls._api.get_json(path)
 
         type_ = result.keys()[0]
         data = result[type_]
@@ -252,13 +252,75 @@ class Account(SubledgerBase):
     def __repr__(self):
         data = self.__dict__.copy()
         data['book'] = Book.from_id(self._book_id, self._org_id)
-        signature = "Account(%(book)r, %(description)s, "\
-            "%(normal_balance)s) %(_id)s"
+        signature = "Account(%(book)r, %(description)s, " \
+                    "%(normal_balance)s) %(_id)s"
         return signature % data
 
 
 class JournalEntry(SubledgerBase):
     """ """
+    _path = '/orgs/%(_org_id)s/books/%(_book_id)s/journal_entries/create_and_post'
+    _get_path = '/orgs/%(_org_id)s/books/%(_book_id)s/journal_entries/%(_id)s'
+    _types = ('posted_journal_entry', 'posting_journal_entry')
+
+    def __init__(self, book, description, effective_at, lines, reference=None):
+        """Create a journal entry
+
+        `book` should be passed as an instance of Book
+        `lines` should be a list of dictionary objects with these keys: account, value
+        value should be a dictionary with these keys: type, amount
+        """
+        super(JournalEntry, self).__init__(description, reference)
+        self._org_id = book._org_id
+        self._book_id = book._id
+        # JournalEntry specific fields
+        self.effective_at = effective_at
+        self.lines = lines
+
+    @classmethod
+    @memoize
+    def from_id(cls, id_, org_id, book_id):
+        """Read JournalEntry with the given id, org_id and book_id from Subledger
+
+        A Journal Entry needs a Book and Organization id's to identify the resource.
+        It will be used to build the ReST path to the Account resource.
+        """
+        # Build path
+        path = cls._get_path % {'_org_id': org_id,
+                                '_book_id': book_id,
+                                '_id': id_}
+        result = cls._api.get_json(path)
+
+        type_ = result.keys()[0]
+        data = result[type_]
+        # Add org_id to the data, it is not returned by Subledger
+        data['org'] = org_id
+        data['type'] = type_
+        return cls._from_dict(data)
+
+    @classmethod
+    @memoize_from_dict
+    def _from_dict(cls, data):
+        """Instantiate a JournalEntry from a Subledger representation
+
+        All data should be in the dictionary `data`
+        This method will not query Subledger
+        """
+        # Emulate Book object without http requests
+        book = Dummy()
+        book._id = data['book']
+        book._org_id = data['org']
+        # Create Account instance
+        self = cls(book=book,
+                   description=data['description'],
+                   effective_at=data['effective_at'],
+                   lines=None,
+                   reference=data.get('reference'))
+        self._id = data['id']
+        self._version = data['version']
+        self._set_type(data['type'])
+        return self
+
     @property
     def is_posted(self):
         return self._type.startswith('posted')
