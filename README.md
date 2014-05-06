@@ -19,15 +19,17 @@ Implemented:
 * Organization
 * Book
 * Account
+* JournalEntry
 
 Todo:
-* JournalEntry
-* Category
-* Report
-* ReportRenderings (nice to have)
+* Switch to v2: https://api.subledger.com/v2/
+* Fix broken tests
+* Implement Category
+* Implement Report
 
-Will not do:
-* Identity (nice to have)
+Nice to hace:
+* Implement Identity
+* ReportRenderings
 
 ## Usage ##
 
