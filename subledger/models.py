@@ -261,7 +261,7 @@ class JournalEntry(SubledgerBase):
     """ """
     _path = '/orgs/%(_org_id)s/books/%(_book_id)s/journal_entries/create_and_post'
     _get_path = '/orgs/%(_org_id)s/books/%(_book_id)s/journal_entries/%(_id)s'
-    _types = ('posted_journal_entry', 'posting_journal_entry')
+    _types = ('active_journal_entry', 'posted_journal_entry', 'posting_journal_entry')
 
     def __init__(self, book, description, effective_at, lines, reference=None):
         """Create a journal entry
